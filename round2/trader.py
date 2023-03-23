@@ -37,17 +37,17 @@ class Trader:
         # track banana price history
         midprice = (max(book.buy_orders.keys()) + min(book.sell_orders.keys())) / 2
         self.banana_prices = pd.concat([
-            self.banana_prices, 
-            pd.DataFrame.from_records([{'timestamp': time, 'price': midprice}])
-            ])
-        print(self.banana_prices.shape)
+            self.banana_prices,
+            pd.DataFrame([[time, midprice]],columns=['timestamp', 'price'])
+        ], ignore_index=True)
+
         # need 26 days for macd to be calculated
         if (self.banana_prices.shape[0] < 26):
             return orders
         
         # calculate macd and trading signal
-        macd = self.get_macd(self.banana_prices['price'], 12, 26, 9)
-        self.get_signal(macd)
+        macd, signal = self.get_macd(12, 26, 9)
+        self.get_signal(macd, signal)
         print("banana signal: ", self.banana_signal)
         # trade base on signal
         if self.banana_signal == 1:
@@ -57,24 +57,21 @@ class Trader:
 
         return orders
     
-    def get_macd(self, price:pd.Series, slow:int, fast:int, smooth:int) -> pd.DataFrame:
-        exp1 = price.ewm(span = fast, adjust = False).mean()
-        exp2 = price.ewm(span = slow, adjust = False).mean()
+    def get_macd(self, slow:int, fast:int, smooth:int):
+        exp1 = self.banana_prices['price'].ewm(span = fast, adjust = False).mean()
+        exp2 = self.banana_prices['price'].ewm(span = slow, adjust = False).mean()
         macd = pd.DataFrame(exp1 - exp2).rename(columns = {'price':'macd'})
         signal = pd.DataFrame(macd.ewm(span = smooth, adjust = False).mean()).rename(columns = {'macd':'signal'})
-        hist = pd.DataFrame(macd['macd'] - signal['signal']).rename(columns = {0:'hist'})
-        frames = [macd, signal, hist]
-        df = pd.concat(frames, join = 'inner', axis = 1)
-        return df
+        return macd['macd'].to_numpy(), signal['signal'].to_numpy()
     
-    def get_signal(self, macd:pd.DataFrame):
+    def get_signal(self, macd, signal):
         for i in range(len(macd)):
-            if macd['macd'].iloc(i) > macd['signal'].iloc(i):
+            if macd[i] > signal[i]:
                 if self.banana_signal != 1:
                     self.banana_signal = 1
                 else:
                     self.banana_signal = 0
-            elif macd['macd'].iloc(i) < macd['signal'].iloc(i):
+            elif macd[i] < signal[i]:
                 if self.banana_signal != -1:
                     self.banana_signal = -1
                 else:
