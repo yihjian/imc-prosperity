@@ -26,8 +26,8 @@ class Trader:
         for product in state.order_depths.keys():
             if product == "PEARLS":
                 pearl_order.extend(self.pearl_trader(state.order_depths['PEARLS']))
-            # if product == "BANANAS":
-            #     banana_order.extend(self.banana_trader(state.order_depths['BANANAS'], state.timestamp))
+            if product == "BANANAS":
+                banana_order.extend(self.banana_trader(state.order_depths['BANANAS'], state.timestamp))
             if product == "BERRIES":
                 mayberry_order.extend(self.mayberry_trader(state.order_depths['BERRIES'], state.timestamp))
         print(self.positions)
@@ -91,9 +91,8 @@ class Trader:
             return orders
         
         # calculate macd and trading signal
-        macd, signal = self.get_macd(12, 26, 9)
-        self.get_signal(macd, signal)
-        print("banana signal: ", self.banana_signal)
+        self.calc_banana_signal(12, 26, 9)
+
         # trade base on signal
         if self.banana_signal == 1:
             orders.append(Order("BANANAS", min(book.sell_orders.keys()), -book.sell_orders[min(book.sell_orders.keys())]))
@@ -102,24 +101,30 @@ class Trader:
 
         return orders
     
-    def get_macd(self, slow:int, fast:int, smooth:int):
-        exp1 = self.banana_prices['price'].ewm(span = fast, adjust = False).mean()
-        exp2 = self.banana_prices['price'].ewm(span = slow, adjust = False).mean()
-        macd = pd.DataFrame(exp1 - exp2).rename(columns = {'price':'macd'})
-        signal = pd.DataFrame(macd.ewm(span = smooth, adjust = False).mean()).rename(columns = {'macd':'signal'})
-        return macd['macd'].to_numpy(), signal['signal'].to_numpy()
-    
-    def get_signal(self, macd, signal):
-        for i in range(len(macd)):
-            if macd[i] > signal[i]:
-                if self.banana_signal != 1:
-                    self.banana_signal = 1
-                else:
-                    self.banana_signal = 0
-            elif macd[i] < signal[i]:
-                if self.banana_signal != -1:
-                    self.banana_signal = -1
-                else:
-                    self.banana_signal = 0
-            else:
-                self.banana_signal = 0
+    def calc_banana_signal(self, slow:int, fast:int, smooth:int):
+        banana = self.banana_prices.copy()
+
+        # calculate MACD difference
+        banana['exp1'] = banana['price'].ewm(span = fast, adjust = False).mean()
+        banana['exp2'] = banana['price'].ewm(span = slow, adjust = False).mean()
+        banana['macd'] = banana['exp1'] - banana['exp2']
+        banana['macd_signal'] = banana['macd'].ewm(span = smooth, adjust = False).mean()
+        banana['macd_diff'] = banana['macd'] - banana['macd_signal']
+
+        # calculate RSI
+        banana['U'] = banana['price'] - banana['price'].shift(1)
+        banana['D'] = banana['price'].shift(1) - banana['price']
+        banana['U'] = banana['U'].apply(lambda x: max(0, x))
+        banana['D'] = banana['D'].apply(lambda x: max(0, x))
+        banana['RS'] = banana['U'].ewm(span=12, adjust=False).mean() / banana['D'].ewm(span=12, adjust=False).mean()
+        banana['RSI'] = 100 - (100 / (1 + banana['RS']))
+
+        # calculate trading signal
+        macd_sig = banana['macd_diff'].iloc[-1]
+        rsi_sig = banana['RSI'].iloc[-1]
+        if macd_sig > 0 and rsi_sig < 50:
+            self.banana_signal = 1
+        elif macd_sig < 0 and rsi_sig > 50:
+            self.banana_signal = -1
+        else:
+            self.banana_signal = 0
