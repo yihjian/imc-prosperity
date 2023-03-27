@@ -26,8 +26,8 @@ class Trader:
         for product in state.order_depths.keys():
             if product == "PEARLS":
                 pearl_order.extend(self.pearl_trader(state.order_depths['PEARLS']))
-            if product == "BANANAS":
-                banana_order.extend(self.banana_trader(state.order_depths['BANANAS'], state.timestamp))
+            # if product == "BANANAS":
+            #     banana_order.extend(self.banana_trader(state.order_depths['BANANAS'], state.timestamp))
             if product == "BERRIES":
                 mayberry_order.extend(self.mayberry_trader(state.order_depths['BERRIES'], state.timestamp))
         print(self.positions)
